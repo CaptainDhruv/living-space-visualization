@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Architectural Interior Visualization</title>
+
+    <style>
+      html,
+      body {
+        margin: 0;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        background: #0b0f1a;
+        font-family: "Segoe UI", Arial, sans-serif;
+      }
+      canvas {
+        display: block;
+      }
+
+      /* UI */
+      #ui {
+        position: fixed;
+        top: 20px;
+        left: 20px;
+        background: rgba(18, 20, 35, 0.88);
+        padding: 14px;
+        border-radius: 14px;
+        color: white;
+        z-index: 10;
+        backdrop-filter: blur(10px);
+      }
+      #ui h3 {
+        margin: 10px 0 6px;
+        font-size: 12px;
+        letter-spacing: 1px;
+        color: #ffb703;
+      }
+      #ui button {
+        width: 170px;
+        margin-bottom: 6px;
+        padding: 6px;
+        border: none;
+        border-radius: 6px;
+        background: linear-gradient(135deg, #4d96ff, #845ec2);
+        color: white;
+        cursor: pointer;
+        font-size: 12px;
+      }
+      #ui label {
+        font-size: 11px;
+        opacity: 0.8;
+      }
+      #ui input {
+        width: 170px;
+      }
+
+      /* Description */
+      #description {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        width: 320px;
+        background: rgba(18, 20, 35, 0.78);
+        padding: 18px;
+        border-radius: 16px;
+        color: white;
+        z-index: 10;
+        backdrop-filter: blur(12px);
+      }
+
+      /* Floor Plan */
+      #floorplan {
+        position: fixed;
+        bottom: 20px;
+        left: 20px;
+        width: 260px;
+        height: 180px;
+        background: rgba(10, 10, 20, 0.9);
+        border-radius: 12px;
+        padding: 10px;
+        display: none;
+        z-index: 10;
+      }
+      .fp-dot {
+        position: absolute;
+        width: 10px;
+        height: 10px;
+        background: #ffb703;
+        border-radius: 50%;
+        cursor: pointer;
+      }
+
+      /* Labels */
+      .label {
+        position: absolute;
+        background: rgba(0, 0, 0, 0.65);
+        color: white;
+        padding: 4px 8px;
+        border-radius: 6px;
+        font-size: 11px;
+        pointer-events: none;
+        transform: translate(-50%, -120%);
+        z-index: 5;
+      }
+
+      /* Presentation hint */
+      #presentationHint {
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        color: white;
+        font-size: 12px;
+        opacity: 0.7;
+        z-index: 10;
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="ui">
+      <h3>CAMERA PRESETS</h3>
+      <button onclick="goPreset('intro')">Intro</button>
+      <button onclick="goPreset('sofa')">Sofa</button>
+      <button onclick="goPreset('window')">Window</button>
+      <button onclick="goPreset('top')">Top</button>
+
+      <h3>TIME OF DAY</h3>
+      <label>Night → Day</label><br />
+      <input
+        type="range"
+        id="timeSlider"
+        min="0"
+        max="1"
+        step="0.001"
+        value="1"
+      />
+
+      <h3>FLOOR PLAN</h3>
+      <button onclick="togglePlan()">Toggle Floor Plan</button>
+
+      <h3>PRESENTATION</h3>
+      <button onclick="togglePresentation()">Presentation Mode</button>
+    </div>
+
+    <div id="description">
+      <h2>Living Space Visualization</h2>
+      <p>
+        An interactive architectural interior study exploring spatial
+        composition, lighting behavior, and atmosphere through camera control
+        and time-of-day simulation.
+      </p>
+    </div>
+
+    <div id="floorplan"></div>
+    <div id="presentationHint">Press ESC to exit presentation</div>
+
+    <script src="https://cdn.jsdelivr.net/npm/three@0.146.0/build/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.146.0/examples/js/loaders/GLTFLoader.js"></script>
+
+    <script>
+      /* ======================
+   SCENE / CAMERA
+====================== */
+      const scene = new THREE.Scene();
+      scene.background = new THREE.Color(0xcfe8ff);
+
+      const camera = new THREE.PerspectiveCamera(
+        60,
+        innerWidth / innerHeight,
+        0.1,
+        100
+      );
+      let cam = { radius: 8, theta: Math.PI / 3, phi: Math.PI / 3 };
+
+      function updateCamera() {
+        camera.position.set(
+          cam.radius * Math.sin(cam.phi) * Math.cos(cam.theta),
+          cam.radius * Math.cos(cam.phi),
+          cam.radius * Math.sin(cam.phi) * Math.sin(cam.theta)
+        );
+        camera.lookAt(0, 1, 0);
+      }
+      updateCamera();
+
+      /* ======================
+   RENDERER
+====================== */
+      const renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer.setSize(innerWidth, innerHeight);
+      renderer.setPixelRatio(devicePixelRatio);
+      document.body.appendChild(renderer.domElement);
+
+      /* ======================
+   LIGHTING
+====================== */
+      const sun = new THREE.DirectionalLight(0xffffff, 1.2);
+      sun.position.set(5, 8, 5);
+      scene.add(sun);
+
+      const ambient = new THREE.AmbientLight(0xffffff, 0.6);
+      scene.add(ambient);
+
+      const interiorLights = [];
+      for (let i = 0; i < 3; i++) {
+        const l = new THREE.PointLight(0xffc18a, 0, 5, 2);
+        l.position.set((i - 1) * 1.2, 2.4, -0.5);
+        scene.add(l);
+        interiorLights.push(l);
+      }
+
+      /* ======================
+   LOAD ROOM
+====================== */
+      let roomRoot = null;
+      new THREE.GLTFLoader().load("./assets/room.glb", (g) => {
+        roomRoot = g.scene;
+        scene.add(roomRoot);
+        buildFloorPlan();
+      });
+
+      /* ======================
+   TIME OF DAY
+====================== */
+      const slider = document.getElementById("timeSlider");
+      function setTime(t) {
+        scene.background.lerpColors(
+          new THREE.Color(0x0b0f1a),
+          new THREE.Color(0xcfe8ff),
+          t
+        );
+        sun.intensity = THREE.MathUtils.lerp(0.1, 1.2, t);
+        ambient.intensity = THREE.MathUtils.lerp(0.15, 0.6, t);
+        interiorLights.forEach(
+          (l) => (l.intensity = THREE.MathUtils.lerp(1.2, 0, t))
+        );
+      }
+      slider.oninput = (e) => setTime(+e.target.value);
+      setTime(1);
+
+      /* ======================
+   CAMERA PRESETS
+====================== */
+      const presets = {
+        intro: { radius: 8, theta: Math.PI / 3, phi: Math.PI / 3 },
+        sofa: { radius: 5, theta: Math.PI, phi: Math.PI / 3 },
+        window: { radius: 4, theta: -Math.PI / 2, phi: Math.PI / 3 },
+        top: { radius: 7, theta: 0, phi: 0.25 },
+      };
+      function goPreset(name) {
+        const t = presets[name];
+        if (!t) return;
+        const s = { ...cam };
+        let k = 0;
+        (function anim() {
+          k += 0.03;
+          cam.radius = THREE.MathUtils.lerp(s.radius, t.radius, k);
+          cam.theta = THREE.MathUtils.lerp(s.theta, t.theta, k);
+          cam.phi = THREE.MathUtils.lerp(s.phi, t.phi, k);
+          updateCamera();
+          if (k < 1) requestAnimationFrame(anim);
+        })();
+      }
+
+      /* ======================
+   FLOOR PLAN
+====================== */
+      const floorplan = document.getElementById("floorplan");
+      function buildFloorPlan() {
+        floorplan.innerHTML = "";
+        const box = new THREE.Box3().setFromObject(roomRoot);
+        const size = new THREE.Vector3();
+        box.getSize(size);
+
+        const points = [
+          { x: 0, z: 0, label: "Center" },
+          { x: 1, z: -2, label: "Sofa" },
+          { x: -2, z: 1, label: "Window" },
+        ];
+
+        points.forEach((p) => {
+          const d = document.createElement("div");
+          d.className = "fp-dot";
+          d.style.left = 50 + p.x * 20 + "%";
+          d.style.top = 50 + p.z * 20 + "%";
+          d.title = p.label;
+          floorplan.appendChild(d);
+        });
+      }
+      function togglePlan() {
+        floorplan.style.display =
+          floorplan.style.display === "none" ? "block" : "none";
+      }
+
+      /* ======================
+   PRESENTATION MODE
+====================== */
+      let presentation = false;
+      function togglePresentation() {
+        presentation = !presentation;
+        ui.style.display = presentation ? "none" : "block";
+        description.style.display = presentation ? "none" : "block";
+        presentationHint.style.display = presentation ? "block" : "none";
+      }
+      addEventListener("keydown", (e) => {
+        if (e.key === "Escape" && presentation) togglePresentation();
+      });
+
+      /* ======================
+   ORBIT + ZOOM
+====================== */
+      let drag = false,
+        px = 0,
+        py = 0;
+      renderer.domElement.onmousedown = (e) => {
+        if (presentation) return;
+        drag = true;
+        px = e.clientX;
+        py = e.clientY;
+      };
+      addEventListener("mouseup", () => (drag = false));
+      addEventListener("mousemove", (e) => {
+        if (!drag || presentation) return;
+        cam.theta += (e.clientX - px) * 0.005;
+        cam.phi += (e.clientY - py) * 0.005;
+        cam.phi = Math.max(0.3, Math.min(Math.PI - 0.3, cam.phi));
+        px = e.clientX;
+        py = e.clientY;
+        updateCamera();
+      });
+      renderer.domElement.onwheel = (e) => {
+        if (presentation) return;
+        e.preventDefault();
+        cam.radius += e.deltaY * 0.002;
+        cam.radius = Math.max(3, Math.min(14, cam.radius));
+        updateCamera();
+      };
+
+      /* ======================
+   LOOP
+====================== */
+      function animate() {
+        requestAnimationFrame(animate);
+        if (presentation) {
+          cam.theta += 0.0015;
+          updateCamera();
+        }
+        renderer.render(scene, camera);
+      }
+      animate();
+    </script>
+  </body>
+</html>
